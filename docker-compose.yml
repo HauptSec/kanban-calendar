@@ -6,7 +6,7 @@ services:
       - "8001:8001"
     environment:
       # Extra names/IPs for the self-signed cert, e.g. "DNS:weekboard.local,IP:192.168.1.50"
-      TLS_SAN: ""
+      TLS_SAN: ${TLS_SAN:-}
     volumes:
       # Generated cert persists here; replace cert.pem/key.pem with your own to use a real one
       - certs:/etc/nginx/certs
