@@ -1,0 +1,6 @@
+[Unit]
+Description=Pull kanban-calendar from GitHub and rebuild if changed
+
+[Service]
+Type=oneshot
+ExecStart=%h/kanban-calendar/deploy/auto-deploy.sh
