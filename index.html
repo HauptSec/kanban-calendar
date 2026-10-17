@@ -1,0 +1,709 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Week Board</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0e1014;
+    --bg-2: #151820;
+    --col: #171a22;
+    --col-today: #1c2130;
+    --line: #262b37;
+    --text: #e8eaf0;
+    --muted: #8a90a0;
+    --accent: #7c9cff;
+    --danger: #ff8a8a;
+    --glow: #1a2033;
+    --btn-hover: #1d212b;
+    --btn-hover-line: #333a49;
+    --scroll: #2a2f3b;
+    --card-base: #191c25;
+    --ink: white;            /* card time/checkbox tint mixes toward this */
+    --tool-bg: rgba(0,0,0,.35);
+    --tool-hover: rgba(0,0,0,.6);
+    --shadow: rgba(0,0,0,.35);
+    --backdrop: rgba(5,6,10,.6);
+    --radius: 14px;
+    --font: "Inter", system-ui, -apple-system, sans-serif;
+    color-scheme: dark;
+  }
+  :root[data-theme="light"] {
+    --bg: #f3f4f7;
+    --bg-2: #ffffff;
+    --col: #ffffff;
+    --col-today: #eef2ff;
+    --line: #e1e4eb;
+    --text: #1a1d26;
+    --muted: #6b7280;
+    --accent: #5b7cfa;
+    --danger: #d64545;
+    --glow: #e2e8ff;
+    --btn-hover: #f0f2f6;
+    --btn-hover-line: #cdd2dc;
+    --scroll: #cdd2dc;
+    --card-base: #ffffff;
+    --ink: #1a1d26;
+    --tool-bg: rgba(255,255,255,.75);
+    --tool-hover: rgba(255,255,255,1);
+    --shadow: rgba(20,25,40,.12);
+    --backdrop: rgba(30,35,50,.35);
+    color-scheme: light;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: radial-gradient(1200px 600px at 10% -10%, var(--glow) 0%, transparent 60%), var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    display: flex;
+    flex-direction: column;
+    -webkit-font-smoothing: antialiased;
+  }
+  button { font: inherit; color: inherit; cursor: pointer; }
+
+  /* Header */
+  header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 20px 28px 12px;
+  }
+  .title { display: flex; flex-direction: column; }
+  .title h1 { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.02em; }
+  .title span { color: var(--muted); font-size: 14px; margin-top: 2px; }
+  .spacer { flex: 1; }
+  .clock { text-align: right; margin-right: 8px; }
+  .clock .time { font-size: 26px; font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+  .clock .date { color: var(--muted); font-size: 13px; }
+  .btn {
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 8px 12px;
+    font-size: 14px;
+    transition: background .15s, border-color .15s;
+  }
+  .btn:hover { background: var(--btn-hover); border-color: var(--btn-hover-line); }
+  .btn.icon { width: 38px; height: 38px; padding: 0; display: grid; place-items: center; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #0b0d12; font-weight: 600; }
+  .btn.danger { color: var(--danger); }
+  .nav { display: flex; gap: 6px; }
+
+  /* Board */
+  main {
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 12px;
+    padding: 8px 28px 24px;
+  }
+  .column {
+    background: var(--col);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    transition: background .15s, border-color .15s;
+  }
+  .column.today { background: var(--col-today); border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+  .column.drag-over { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--col)); }
+  .col-head {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 14px 14px 10px;
+  }
+  .col-head .dow { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+  .col-head .num { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; }
+  .today .col-head .dow { color: var(--accent); }
+  .col-head .count { margin-left: auto; font-size: 12px; color: var(--muted); }
+  .add {
+    opacity: 0;
+    border: none;
+    background: none;
+    color: var(--muted);
+    font-size: 20px;
+    line-height: 1;
+    padding: 0 2px;
+    transition: opacity .15s, color .15s;
+  }
+  .column:hover .add { opacity: 1; }
+  .add:hover { color: var(--text); }
+  .cards {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0 10px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--scroll) transparent;
+  }
+
+  /* Card */
+  .card {
+    --c: #7c9cff;
+    position: relative;
+    background: color-mix(in srgb, var(--c) 14%, var(--card-base));
+    border: 1px solid color-mix(in srgb, var(--c) 30%, transparent);
+    border-left: 4px solid var(--c);
+    border-radius: 10px;
+    padding: 10px 10px 10px 12px;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 2px 10px;
+    cursor: grab;
+    transition: transform .12s, box-shadow .12s, opacity .2s;
+  }
+  .card:hover { box-shadow: 0 6px 20px var(--shadow); transform: translateY(-1px); }
+  .card.dragging { opacity: .4; }
+  .card .check {
+    grid-row: span 3;
+    appearance: none;
+    width: 18px; height: 18px;
+    margin: 2px 0 0;
+    border: 2px solid color-mix(in srgb, var(--c) 70%, var(--ink));
+    border-radius: 6px;
+    cursor: pointer;
+    display: grid;
+    place-items: center;
+  }
+  .card .check:checked { background: var(--c); border-color: var(--c); }
+  .card .check:checked::after {
+    content: "";
+    width: 5px; height: 9px;
+    border: solid #0b0d12;
+    border-width: 0 2px 2px 0;
+    transform: translateY(-1px) rotate(45deg);
+  }
+  .card .when { font-size: 12px; font-weight: 600; color: color-mix(in srgb, var(--c) 60%, var(--ink)); font-variant-numeric: tabular-nums; }
+  .card .name { font-size: 15px; font-weight: 600; line-height: 1.3; overflow-wrap: break-word; }
+  .card .notes { font-size: 12.5px; color: var(--muted); line-height: 1.4; white-space: pre-wrap; overflow-wrap: break-word; }
+  .card.done { opacity: .55; }
+  .card.done .name, .card.done .when, .card.done .notes { text-decoration: line-through; }
+  .card .tools {
+    position: absolute;
+    top: 6px; right: 6px;
+    display: flex;
+    gap: 2px;
+    opacity: 0;
+    transition: opacity .15s;
+  }
+  .card:hover .tools { opacity: 1; }
+  .tools button, .tools label {
+    width: 24px; height: 24px;
+    border: none;
+    border-radius: 6px;
+    background: var(--tool-bg);
+    display: grid;
+    place-items: center;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .tools button:hover, .tools label:hover { background: var(--tool-hover); }
+  .tools input[type=color] { position: absolute; width: 0; height: 0; opacity: 0; pointer-events: none; }
+  .swatch-dot { width: 12px; height: 12px; border-radius: 50%; background: var(--c); border: 2px solid rgba(255,255,255,.7); }
+
+  /* Modal */
+  dialog {
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    background: var(--bg-2);
+    color: var(--text);
+    padding: 24px;
+    width: min(440px, calc(100vw - 32px));
+    box-shadow: 0 30px 80px var(--shadow);
+  }
+  dialog::backdrop { background: var(--backdrop); backdrop-filter: blur(4px); }
+  dialog h2 { margin: 0 0 16px; font-size: 18px; }
+  .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+  .field label { font-size: 12px; color: var(--muted); font-weight: 500; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  dialog input, dialog select, dialog textarea {
+    font: inherit;
+    font-size: 14px;
+    color: var(--text);
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 9px 11px;
+  }
+  dialog input:focus, dialog select:focus, dialog textarea:focus { outline: none; border-color: var(--accent); }
+  dialog textarea { resize: vertical; min-height: 64px; }
+  .swatches { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .swatches button {
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    padding: 0;
+  }
+  .swatches button.sel { border-color: var(--text); }
+  .swatches input[type=color] { width: 34px; height: 30px; padding: 2px; border-radius: 8px; cursor: pointer; }
+  .actions { display: flex; gap: 8px; margin-top: 8px; }
+  .scope { display: flex; gap: 6px; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 4px; }
+  .scope label { flex: 1; text-align: center; font-size: 13px; padding: 6px; border-radius: 7px; cursor: pointer; color: var(--muted); }
+  .scope label:has(input:checked) { background: var(--bg-2); color: var(--text); }
+  .scope input { display: none; }
+  .card .repeat { opacity: .8; margin-left: 4px; }
+  .days { display: flex; gap: 6px; }
+  .days button {
+    flex: 1;
+    padding: 7px 0;
+    font-size: 13px;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    background: var(--bg);
+    color: var(--muted);
+  }
+  .days button.sel { background: var(--accent); border-color: var(--accent); color: #0b0d12; font-weight: 600; }
+  dialog.small { width: min(400px, calc(100vw - 32px)); }
+  dialog.small p { color: var(--muted); font-size: 14px; margin: 0 0 16px; }
+
+  /* Fullscreen: hide controls that aren't needed on a passive display */
+  body.fs .controls { display: none; }
+
+  @media (max-width: 900px) {
+    main { grid-template-columns: 1fr; overflow-y: auto; }
+    .column { min-height: 120px; }
+    .cards { overflow: visible; }
+    .add { opacity: 1; }
+    .card .tools { opacity: 1; }
+    header { flex-wrap: wrap; padding: 16px; }
+    main { padding: 8px 16px 16px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="title">
+    <h1 id="weekTitle">This Week</h1>
+    <span id="weekRange"></span>
+  </div>
+  <div class="spacer"></div>
+  <div class="clock"><div class="time" id="clockTime"></div><div class="date" id="clockDate"></div></div>
+  <div class="nav controls">
+    <button class="btn icon" id="prev" title="Previous week">&#8249;</button>
+    <button class="btn" id="today">Today</button>
+    <button class="btn icon" id="next" title="Next week">&#8250;</button>
+  </div>
+  <button class="btn primary controls" id="newEvent">+ Event</button>
+  <button class="btn icon" id="theme" title="Toggle light/dark"></button>
+  <button class="btn icon" id="fullscreen" title="Toggle full screen">&#x26F6;</button>
+</header>
+
+<main id="board"></main>
+
+<dialog id="editor">
+  <form method="dialog" id="form">
+    <h2 id="formTitle">New event</h2>
+    <div class="field">
+      <label for="fTitle">Event</label>
+      <input id="fTitle" required autocomplete="off" placeholder="Dinner with friends">
+    </div>
+    <div class="field">
+      <label for="fDate">Day</label>
+      <input id="fDate" type="date" required>
+    </div>
+    <div class="row">
+      <div class="field"><label for="fStart">Start</label><input id="fStart" type="time"></div>
+      <div class="field"><label for="fEnd">End</label><input id="fEnd" type="time"></div>
+    </div>
+    <div class="row" id="repeatRow">
+      <div class="field">
+        <label for="fRepeat">Repeat</label>
+        <select id="fRepeat">
+          <option value="">Never</option>
+          <option value="daily">Every day</option>
+          <option value="weekdays">Weekdays (Mon-Fri)</option>
+          <option value="weekly">Every week</option>
+          <option value="biweekly">Every 2 weeks</option>
+          <option value="monthly">Every month</option>
+          <option value="monthlyNth">Every month</option>
+          <option value="monthlyLast">Every month</option>
+        </select>
+      </div>
+      <div class="field" id="untilField"><label for="fUntil">Until (optional)</label><input id="fUntil" type="date"></div>
+    </div>
+    <div class="field" id="daysField">
+      <label>On</label>
+      <div class="days" id="days"></div>
+    </div>
+    <div class="field">
+      <label for="fNotes">Details</label>
+      <textarea id="fNotes" placeholder="Location, notes..."></textarea>
+    </div>
+    <div class="field">
+      <label>Color</label>
+      <div class="swatches" id="swatches"></div>
+    </div>
+    <div class="field" id="scopeField">
+      <label>Apply changes to</label>
+      <div class="scope">
+        <label><input type="radio" name="scope" value="one" checked> This event</label>
+        <label><input type="radio" name="scope" value="all"> All events</label>
+      </div>
+    </div>
+    <div class="actions">
+      <button type="button" class="btn danger" id="delete">Delete</button>
+      <div class="spacer"></div>
+      <button type="button" class="btn" id="cancel">Cancel</button>
+      <button type="submit" class="btn primary">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="delDlg" class="small">
+  <form method="dialog">
+    <h2>Delete repeating event</h2>
+    <p id="delText"></p>
+    <div class="actions">
+      <button value="cancel" class="btn">Cancel</button>
+      <div class="spacer"></div>
+      <button value="one" class="btn danger">This event</button>
+      <button value="all" class="btn danger">All events</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+const STORE = "weekboard.events.v1";
+const PALETTE = ["#7c9cff", "#5ed6b4", "#ffb86b", "#ff7a9c", "#b18cff", "#4fc3f7", "#f5d76e", "#a0a8b8"];
+const DOW = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+let events = load();
+let weekStart = mondayOf(new Date());
+let editingId = null;
+let editingDate = null;  // which occurrence was opened (matters for recurring events)
+let pickedColor = PALETTE[0];
+
+function load() {
+  try { return JSON.parse(localStorage.getItem(STORE)) || []; } catch { return []; }
+}
+function save() { localStorage.setItem(STORE, JSON.stringify(events)); }
+
+function mondayOf(d) {
+  const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  x.setDate(x.getDate() - ((x.getDay() + 6) % 7));
+  return x;
+}
+function addDays(d, n) { const x = new Date(d); x.setDate(x.getDate() + n); return x; }
+// Local yyyy-mm-dd (toISOString would shift to UTC)
+function iso(d) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; }
+function fmtTime(t) {
+  if (!t) return "";
+  const [h, m] = t.split(":").map(Number);
+  return `${((h + 11) % 12) + 1}:${String(m).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`;
+}
+function parse(s) { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d); }
+function diffDays(a, b) { return Math.round((parse(a) - parse(b)) / 864e5); }  // round absorbs DST hour
+
+// Recurring events are stored once as a series: `date` is the first occurrence,
+// `skip` lists deleted/moved occurrences, `doneDates` tracks completion per occurrence.
+function occursOn(e, day) {
+  if (!e.repeat) return e.date === day;
+  if (day < e.date || (e.until && day > e.until) || e.skip?.includes(day)) return false;
+  const d = parse(day), s = parse(e.date);
+  // Weekly series repeat on `days` (0 = Sun); older events without it use the start's weekday
+  const onDay = (e.days?.length ? e.days : [s.getDay()]).includes(d.getDay());
+  const weeks = diffDays(iso(mondayOf(d)), iso(mondayOf(s))) / 7;
+  switch (e.repeat) {
+    case "daily": return true;
+    case "weekdays": return d.getDay() % 6 !== 0;
+    case "weekly": return onDay;
+    case "biweekly": return onDay && weeks % 2 === 0;
+    // ponytail: months lacking the start date (e.g. the 31st) are skipped, not clamped to month end
+    case "monthly": return d.getDate() === s.getDate();
+    case "monthlyNth": return d.getDay() === s.getDay() && nthOf(d) === nthOf(s);
+    case "monthlyLast": return d.getDay() === s.getDay() && isLastOf(d);
+  }
+  return false;
+}
+function nthOf(d) { return Math.ceil(d.getDate() / 7); }  // 1st..5th weekday of its kind in the month
+function isLastOf(d) { return addDays(d, 7).getMonth() !== d.getMonth(); }
+function isDone(e, day) { return e.repeat ? !!e.doneDates?.includes(day) : !!e.done; }
+function setDone(e, day, v) {
+  if (!e.repeat) { e.done = v; return; }
+  e.doneDates = (e.doneDates || []).filter(x => x !== day);
+  if (v) e.doneDates.push(day);
+}
+// Split one occurrence off a series into a standalone event
+function detach(e, day, changes) {
+  const copy = { ...e, id: crypto.randomUUID(), date: day, done: isDone(e, day), repeat: "", until: "", skip: [], doneDates: [], ...changes };
+  e.skip = [...(e.skip || []), day];
+  events.push(copy);
+}
+
+function esc(s) { return s.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]); }
+
+function render() {
+  const todayIso = iso(new Date());
+  const end = addDays(weekStart, 6);
+  const opts = { month: "short", day: "numeric" };
+  document.getElementById("weekRange").textContent =
+    `${weekStart.toLocaleDateString(undefined, opts)} - ${end.toLocaleDateString(undefined, { ...opts, year: "numeric" })}`;
+  const offset = Math.round((weekStart - mondayOf(new Date())) / 864e5 / 7);
+  document.getElementById("weekTitle").textContent =
+    offset === 0 ? "This Week" : offset === 1 ? "Next Week" : offset === -1 ? "Last Week" : "Week";
+
+  const board = document.getElementById("board");
+  board.innerHTML = "";
+  for (let i = 0; i < 7; i++) {
+    const day = addDays(weekStart, i);
+    const dayIso = iso(day);
+    // All-day (no time) first, then by start time
+    const list = events.filter(e => occursOn(e, dayIso))
+      .sort((a, b) => (a.start || "").localeCompare(b.start || ""));
+
+    const col = document.createElement("section");
+    col.className = "column" + (dayIso === todayIso ? " today" : "");
+    col.dataset.date = dayIso;
+    col.innerHTML = `
+      <div class="col-head">
+        <span class="dow">${DOW[i]}</span><span class="num">${day.getDate()}</span>
+        <span class="count">${list.length ? `${list.filter(e => isDone(e, dayIso)).length}/${list.length}` : ""}</span>
+        <button class="add controls" title="Add event">+</button>
+      </div>
+      <div class="cards"></div>`;
+    col.querySelector(".add").onclick = () => openEditor(null, dayIso);
+    const cards = col.querySelector(".cards");
+    list.forEach(e => cards.appendChild(cardEl(e, dayIso)));
+
+    col.addEventListener("dragover", ev => { ev.preventDefault(); col.classList.add("drag-over"); });
+    col.addEventListener("dragleave", ev => { if (!col.contains(ev.relatedTarget)) col.classList.remove("drag-over"); });
+    col.addEventListener("drop", ev => {
+      ev.preventDefault();
+      const [id, from] = ev.dataTransfer.getData("text/plain").split("|");
+      const e = events.find(x => x.id === id);
+      if (e && from !== dayIso) {
+        // Dragging a recurring occurrence moves just that one
+        if (e.repeat) detach(e, from, { date: dayIso }); else e.date = dayIso;
+        save();
+      }
+      render();
+    });
+    board.appendChild(col);
+  }
+}
+
+function cardEl(e, day) {
+  const done = isDone(e, day);
+  const el = document.createElement("article");
+  el.className = "card" + (done ? " done" : "");
+  el.style.setProperty("--c", e.color);
+  el.draggable = true;
+  const when = e.start ? fmtTime(e.start) + (e.end ? ` - ${fmtTime(e.end)}` : "") : "All day";
+  el.innerHTML = `
+    <input type="checkbox" class="check" ${done ? "checked" : ""} aria-label="Mark complete">
+    <div class="when">${when}${e.repeat ? `<span class="repeat" title="Repeats">&#8635;</span>` : ""}</div>
+    <div class="name">${esc(e.title)}</div>
+    ${e.notes ? `<div class="notes">${esc(e.notes)}</div>` : ""}
+    <div class="tools controls">
+      <label title="Color"><span class="swatch-dot"></span><input type="color" value="${e.color}"></label>
+      <button class="edit" title="Edit">&#9998;</button>
+      <button class="del" title="Delete">&#10005;</button>
+    </div>`;
+
+  el.querySelector(".check").onchange = ev => { setDone(e, day, ev.target.checked); save(); render(); };
+  const color = el.querySelector("input[type=color]");
+  color.oninput = () => el.style.setProperty("--c", color.value);  // live preview
+  color.onchange = () => { e.color = color.value; save(); };
+  el.querySelector(".edit").onclick = () => openEditor(e, day);
+  el.querySelector(".del").onclick = () => {
+    if (!e.repeat) { if (confirm(`Delete "${e.title}"?`)) remove(e, day, true); return; }
+    $("delText").textContent = `Delete "${e.title}" on this day only, or every occurrence?`;
+    delDlg.returnValue = "cancel";  // Esc keeps this
+    delDlg.onclose = () => { if (delDlg.returnValue !== "cancel") remove(e, day, delDlg.returnValue === "all"); };
+    delDlg.showModal();
+  };
+  el.ondblclick = ev => { if (!ev.target.closest(".tools, .check")) openEditor(e, day); };
+  el.ondragstart = ev => { ev.dataTransfer.setData("text/plain", `${e.id}|${day}`); el.classList.add("dragging"); };
+  el.ondragend = () => el.classList.remove("dragging");
+  return el;
+}
+
+// Callers confirm first
+function remove(e, day, all) {
+  if (e.repeat && !all) e.skip = [...(e.skip || []), day];
+  else events = events.filter(x => x !== e);
+  save(); render();
+}
+
+// Editor
+const dlg = document.getElementById("editor");
+const delDlg = document.getElementById("delDlg");
+const $ = id => document.getElementById(id);
+
+function renderSwatches() {
+  const wrap = $("swatches");
+  wrap.innerHTML = "";
+  PALETTE.forEach(c => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.style.background = c;
+    b.className = c === pickedColor ? "sel" : "";
+    b.onclick = () => { pickedColor = c; renderSwatches(); };
+    wrap.appendChild(b);
+  });
+  const custom = document.createElement("input");
+  custom.type = "color";
+  custom.value = pickedColor;
+  custom.title = "Custom color";
+  custom.oninput = () => { pickedColor = custom.value; wrap.querySelectorAll("button").forEach(b => b.className = ""); };
+  wrap.appendChild(custom);
+}
+
+const scope = () => $("form").elements.scope.value;
+const editing = () => events.find(x => x.id === editingId);
+
+// Repeat settings only make sense for new events, one-offs, or "All events"
+const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+let pickedDays = [];
+const formDay = () => ($("fDate").value ? parse($("fDate").value) : new Date()).getDay();
+
+function updateRepeatUI() {
+  const hide = editing()?.repeat && scope() === "one";
+  const r = $("fRepeat").value;
+  $("repeatRow").style.display = hide ? "none" : "";
+  $("untilField").style.visibility = r ? "" : "hidden";
+  $("daysField").style.display = !hide && (r === "weekly" || r === "biweekly") ? "" : "none";
+  // Monthly option labels depend on the chosen date
+  const d = $("fDate").value ? parse($("fDate").value) : new Date();
+  const opt = v => $("fRepeat").querySelector(`[value=${v}]`);
+  opt("monthly").textContent = `Monthly on day ${d.getDate()}`;
+  opt("monthlyNth").textContent = `Monthly on the ${["1st", "2nd", "3rd", "4th", "5th"][nthOf(d) - 1]} ${DAY_NAMES[d.getDay()]}`;
+  opt("monthlyLast").textContent = `Monthly on the last ${DAY_NAMES[d.getDay()]}`;
+  opt("monthlyLast").hidden = !isLastOf(d);
+  renderDays();
+}
+function renderDays() {
+  const wrap = $("days");
+  wrap.innerHTML = "";
+  [1, 2, 3, 4, 5, 6, 0].forEach(n => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = DAY_NAMES[n].slice(0, 3);
+    b.className = pickedDays.includes(n) ? "sel" : "";
+    b.onclick = () => { pickedDays = pickedDays.includes(n) ? pickedDays.filter(x => x !== n) : [...pickedDays, n]; renderDays(); };
+    wrap.appendChild(b);
+  });
+}
+$("fRepeat").onchange = updateRepeatUI;
+// A single picked weekday follows the date; a custom multi-day pick is left alone
+$("fDate").onchange = () => { if (pickedDays.length <= 1) pickedDays = [formDay()]; updateRepeatUI(); };
+document.querySelectorAll("input[name=scope]").forEach(r => r.onchange = updateRepeatUI);
+
+function openEditor(e, date) {
+  editingId = e ? e.id : null;
+  editingDate = date;
+  $("formTitle").textContent = e ? "Edit event" : "New event";
+  $("fTitle").value = e?.title || "";
+  $("fDate").value = date || iso(new Date() >= weekStart && new Date() < addDays(weekStart, 7) ? new Date() : weekStart);
+  $("fStart").value = e?.start || "";
+  $("fEnd").value = e?.end || "";
+  $("fNotes").value = e?.notes || "";
+  $("fRepeat").value = e?.repeat || "";
+  $("fUntil").value = e?.until || "";
+  $("form").elements.scope.value = "one";
+  $("scopeField").style.display = e?.repeat ? "" : "none";
+  pickedDays = e?.days?.length ? [...e.days] : [e ? parse(e.date).getDay() : formDay()];
+  pickedColor = e?.color || PALETTE[0];
+  $("delete").style.display = e ? "" : "none";
+  renderSwatches();
+  updateRepeatUI();
+  dlg.showModal();
+  $("fTitle").focus();
+}
+
+$("form").onsubmit = () => {
+  const data = {
+    title: $("fTitle").value.trim(),
+    date: $("fDate").value,
+    start: $("fStart").value,
+    end: $("fEnd").value,
+    notes: $("fNotes").value.trim(),
+    color: pickedColor,
+    repeat: $("fRepeat").value,
+    until: $("fRepeat").value ? $("fUntil").value : "",
+    days: ["weekly", "biweekly"].includes($("fRepeat").value) ? (pickedDays.length ? [...pickedDays].sort() : [formDay()]) : [],
+  };
+  const e = editing();
+  if (!e) events.push({ id: crypto.randomUUID(), done: false, skip: [], doneDates: [], ...data });
+  else if (e.repeat && scope() === "one") detach(e, editingDate, { ...data, repeat: "", until: "" });
+  else {
+    // Editing a whole series from one occurrence: shift the series start by however far that occurrence moved
+    if (e.repeat && data.repeat) {
+      const shift = d => iso(addDays(parse(d), diffDays(data.date, editingDate)));
+      Object.assign(data, { date: shift(e.date), skip: (e.skip || []).map(shift), doneDates: (e.doneDates || []).map(shift) });
+    }
+    Object.assign(e, data);
+  }
+  save(); render();
+};
+$("cancel").onclick = () => dlg.close();
+$("delete").onclick = () => {
+  const e = editing(), all = !e.repeat || scope() === "all";
+  const msg = !e.repeat ? `Delete "${e.title}"?` : all ? `Delete every "${e.title}" event?` : `Delete "${e.title}" on this day only?`;
+  if (!confirm(msg)) return;
+  remove(e, editingDate, all);
+  dlg.close();
+};
+
+// Header controls
+$("prev").onclick = () => { weekStart = addDays(weekStart, -7); render(); };
+$("next").onclick = () => { weekStart = addDays(weekStart, 7); render(); };
+$("today").onclick = () => { weekStart = mondayOf(new Date()); render(); };
+$("newEvent").onclick = () => openEditor(null);
+$("fullscreen").onclick = () => document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
+// Theme is a per-device preference
+function setTheme(t) {
+  document.documentElement.dataset.theme = t;
+  $("theme").innerHTML = t === "light" ? "&#9790;" : "&#9728;";  // show the mode you'd switch to
+  try { localStorage.setItem("weekboard.theme", t); } catch {}
+}
+let savedTheme = "dark";
+try { savedTheme = localStorage.getItem("weekboard.theme") || "dark"; } catch {}
+setTheme(savedTheme);
+$("theme").onclick = () => setTheme(document.documentElement.dataset.theme === "light" ? "dark" : "light");
+document.addEventListener("fullscreenchange", () => document.body.classList.toggle("fs", !!document.fullscreenElement));
+
+// Clock; also re-render when the day rolls over so "today" highlight moves
+let lastDay = iso(new Date());
+function tick() {
+  const now = new Date();
+  $("clockTime").textContent = now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  $("clockDate").textContent = now.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
+  if (iso(now) !== lastDay) { lastDay = iso(now); weekStart = mondayOf(now); render(); }
+}
+setInterval(tick, 1000);
+tick();
+render();
+
+// Open index.html#selftest and check the console
+if (location.hash === "#selftest") {
+  const s = { date: "2026-10-12", repeat: "weekly", skip: ["2026-10-26"] };  // a Monday
+  const t = (cond, msg) => console.assert(cond, msg) || cond;
+  const ok = [
+    t(occursOn(s, "2026-10-19") && !occursOn(s, "2026-10-20"), "weekly"),
+    t(!occursOn(s, "2026-10-05"), "nothing before start"),
+    t(!occursOn(s, "2026-10-26"), "skipped date"),
+    t(occursOn({ ...s, repeat: "biweekly" }, "2026-11-09") && !occursOn({ ...s, repeat: "biweekly" }, "2026-11-02"), "biweekly"),
+    t(occursOn({ ...s, repeat: "weekdays" }, "2026-10-16") && !occursOn({ ...s, repeat: "weekdays" }, "2026-10-17"), "weekdays"),
+    t(occursOn({ ...s, repeat: "monthly" }, "2026-11-12") && !occursOn({ ...s, repeat: "monthly" }, "2026-11-13"), "monthly"),
+    t(!occursOn({ ...s, until: "2026-10-31" }, "2026-11-02"), "until"),
+    t(occursOn({ ...s, days: [1, 3] }, "2026-10-14") && !occursOn({ ...s, days: [1, 3] }, "2026-10-13"), "weekly on Mon+Wed"),
+    t(occursOn({ ...s, repeat: "biweekly", days: [1, 3] }, "2026-10-28") && !occursOn({ ...s, repeat: "biweekly", days: [1, 3] }, "2026-10-21"), "biweekly on Mon+Wed"),
+    t(occursOn({ ...s, repeat: "monthlyNth" }, "2026-11-09") && !occursOn({ ...s, repeat: "monthlyNth" }, "2026-11-16"), "2nd Monday"),
+    t(occursOn({ ...s, date: "2026-10-26", repeat: "monthlyLast" }, "2026-11-30") && !occursOn({ ...s, date: "2026-10-26", repeat: "monthlyLast" }, "2026-11-23"), "last Monday"),
+    t(diffDays("2026-11-02", "2026-10-26") === 7, "diff across DST"),
+  ].every(Boolean);
+  console.log(ok ? "selftest passed" : "selftest FAILED");
+}
+</script>
+</body>
+</html>
