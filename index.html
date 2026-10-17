@@ -910,6 +910,22 @@ function renderDays() {
   });
 }
 $("fRepeat").onchange = updateRepeatUI;
+
+// Setting a start time fills the end one hour later; changing the start keeps the event's length.
+// Clearing the start (all day) clears the end too.
+let lastStart = "";
+const toMin = t => { const [h, m] = t.split(":").map(Number); return h * 60 + m; };
+const wrapDay = n => ((n % 1440) + 1440) % 1440;
+const fromMin = n => `${String(Math.floor(wrapDay(n) / 60)).padStart(2, "0")}:${String(wrapDay(n) % 60).padStart(2, "0")}`;
+function endAfter(start, prevStart, end) {
+  if (!start) return "";
+  const length = end && prevStart ? wrapDay(toMin(end) - toMin(prevStart)) || 60 : 60;
+  return fromMin(toMin(start) + length);
+}
+$("fStart").onchange = () => {
+  $("fEnd").value = endAfter($("fStart").value, lastStart, $("fEnd").value);
+  lastStart = $("fStart").value;
+};
 // A single picked weekday follows the date; a custom multi-day pick is left alone
 $("fDate").onchange = () => { if (pickedDays.length <= 1) pickedDays = [formDay()]; updateRepeatUI(); };
 document.querySelectorAll("input[name=scope]").forEach(r => r.onchange = updateRepeatUI);
@@ -922,6 +938,7 @@ function openEditor(e, date) {
   $("fDate").value = date || iso(new Date() >= weekStart && new Date() < addDays(weekStart, 7) ? new Date() : weekStart);
   $("fStart").value = e?.start || "";
   $("fEnd").value = e?.end || "";
+  lastStart = $("fStart").value;
   $("fNotes").value = e?.notes || "";
   $("fRepeat").value = e?.repeat || "";
   $("fUntil").value = e?.until || "";
@@ -1038,7 +1055,8 @@ function pickTemplate(t) {
   renderSwatches();
   $("fRepeat").value = t.repeat || "";
   $("fStart").value = t.start || "";
-  $("fEnd").value = "";
+  $("fEnd").value = endAfter($("fStart").value, "", "");
+  lastStart = $("fStart").value;
   updateRepeatUI();
   applyTemplate();
   $("tplFields").querySelector("input, select").focus();
@@ -1146,6 +1164,10 @@ if (location.hash === "#selftest") {
     t(occursOn({ ...s, date: "2026-10-26", repeat: "monthlyLast" }, "2026-11-30") && !occursOn({ ...s, date: "2026-10-26", repeat: "monthlyLast" }, "2026-11-23"), "last Monday"),
     t(occursOn({ ...s, repeat: "yearly" }, "2027-10-12") && !occursOn({ ...s, repeat: "yearly" }, "2026-11-12"), "yearly"),
     t(diffDays("2026-11-02", "2026-10-26") === 7, "diff across DST"),
+    t(endAfter("09:00", "", "") === "10:00", "end defaults to +1h"),
+    t(endAfter("10:00", "09:00", "09:30") === "10:30", "moving start keeps length"),
+    t(endAfter("23:30", "", "") === "00:30", "end wraps past midnight"),
+    t(endAfter("", "09:00", "10:00") === "", "clearing start clears end"),
   ].every(Boolean);
   console.log(ok ? "selftest passed" : "selftest FAILED");
 }
