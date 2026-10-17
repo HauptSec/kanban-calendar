@@ -262,6 +262,19 @@
     color: var(--muted);
   }
   .days button.sel { background: var(--accent); border-color: var(--accent); color: #0b0d12; font-weight: 600; }
+  .offline {
+    position: fixed;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--danger);
+    color: #0b0d12;
+    font-size: 14px;
+    font-weight: 600;
+    padding: 8px 14px;
+    border-radius: 10px;
+    box-shadow: 0 6px 20px var(--shadow);
+  }
   dialog.small { width: min(400px, calc(100vw - 32px)); }
   dialog.small p { color: var(--muted); font-size: 14px; margin: 0 0 16px; }
 
@@ -298,6 +311,7 @@
 </header>
 
 <main id="board"></main>
+<div id="offline" class="offline" role="status" hidden>Can't reach the server. Recent changes may not be saved.</div>
 
 <dialog id="editor">
   <form method="dialog" id="form">
@@ -372,20 +386,51 @@
 </dialog>
 
 <script>
-const STORE = "weekboard.events.v1";
+const LEGACY_STORE = "weekboard.events.v1";  // browser-only storage from before the server API; uploaded once
 const PALETTE = ["#7c9cff", "#5ed6b4", "#ffb86b", "#ff7a9c", "#b18cff", "#4fc3f7", "#f5d76e", "#a0a8b8"];
 const DOW = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
-let events = load();
+let events = [];
 let weekStart = mondayOf(new Date());
 let editingId = null;
 let editingDate = null;  // which occurrence was opened (matters for recurring events)
 let pickedColor = PALETTE[0];
 
-function load() {
-  try { return JSON.parse(localStorage.getItem(STORE)) || []; } catch { return []; }
+// Server storage. Each changed event is saved on its own (so edits from two devices
+// don't clobber each other), and writes go out one at a time so rapid edits land in order.
+let queue = Promise.resolve();
+let pending = 0;
+let offline = false;
+function setOffline(v) { offline = v; document.getElementById("offline").hidden = !v; }
+function send(method, e) {
+  pending++;
+  queue = queue
+    .then(() => fetch(`/api/events/${e.id}`, method === "PUT"
+      ? { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(e) }
+      : { method }))
+    .then(res => { if (!res.ok) throw new Error(res.status); setOffline(false); })
+    .catch(() => setOffline(true))
+    .finally(() => pending--);
 }
-function save() { localStorage.setItem(STORE, JSON.stringify(events)); }
+function save(...changed) { changed.forEach(e => send("PUT", e)); }
+function destroy(e) { send("DELETE", e); }
+
+async function fetchEvents() {
+  const res = await fetch("/api/events", { cache: "no-store" });
+  if (!res.ok) throw new Error(res.status);
+  return res.json();
+}
+// Pick up changes made on other devices. Skipped mid-edit so the board doesn't jump under you.
+// ponytail: edits that failed to save while offline are replaced by server data on the next sync
+async function sync() {
+  if (pending || dlg.open || delDlg.open || document.querySelector(".dragging")) return;
+  try {
+    const fresh = await fetchEvents();
+    setOffline(false);
+    if (pending) return;  // a local edit started while fetching; the next sync gets it
+    if (JSON.stringify(fresh) !== JSON.stringify(events)) { events = fresh; render(); }
+  } catch { setOffline(true); }
+}
 
 function mondayOf(d) {
   const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -437,6 +482,7 @@ function detach(e, day, changes) {
   const copy = { ...e, id: crypto.randomUUID(), date: day, done: isDone(e, day), repeat: "", until: "", skip: [], doneDates: [], ...changes };
   e.skip = [...(e.skip || []), day];
   events.push(copy);
+  return copy;
 }
 
 function esc(s) { return s.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]); }
@@ -482,8 +528,8 @@ function render() {
       const e = events.find(x => x.id === id);
       if (e && from !== dayIso) {
         // Dragging a recurring occurrence moves just that one
-        if (e.repeat) detach(e, from, { date: dayIso }); else e.date = dayIso;
-        save();
+        if (e.repeat) save(e, detach(e, from, { date: dayIso }));
+        else { e.date = dayIso; save(e); }
       }
       render();
     });
@@ -509,10 +555,10 @@ function cardEl(e, day) {
       <button class="del" title="Delete">&#10005;</button>
     </div>`;
 
-  el.querySelector(".check").onchange = ev => { setDone(e, day, ev.target.checked); save(); render(); };
+  el.querySelector(".check").onchange = ev => { setDone(e, day, ev.target.checked); save(e); render(); };
   const color = el.querySelector("input[type=color]");
   color.oninput = () => el.style.setProperty("--c", color.value);  // live preview
-  color.onchange = () => { e.color = color.value; save(); };
+  color.onchange = () => { e.color = color.value; save(e); };
   el.querySelector(".edit").onclick = () => openEditor(e, day);
   el.querySelector(".del").onclick = () => {
     if (!e.repeat) { if (confirm(`Delete "${e.title}"?`)) remove(e, day, true); return; }
@@ -529,9 +575,9 @@ function cardEl(e, day) {
 
 // Callers confirm first
 function remove(e, day, all) {
-  if (e.repeat && !all) e.skip = [...(e.skip || []), day];
-  else events = events.filter(x => x !== e);
-  save(); render();
+  if (e.repeat && !all) { e.skip = [...(e.skip || []), day]; save(e); }
+  else { events = events.filter(x => x !== e); destroy(e); }
+  render();
 }
 
 // Editor
@@ -633,8 +679,12 @@ $("form").onsubmit = () => {
     days: ["weekly", "biweekly"].includes($("fRepeat").value) ? (pickedDays.length ? [...pickedDays].sort() : [formDay()]) : [],
   };
   const e = editing();
-  if (!e) events.push({ id: crypto.randomUUID(), done: false, skip: [], doneDates: [], ...data });
-  else if (e.repeat && scope() === "one") detach(e, editingDate, { ...data, repeat: "", until: "" });
+  if (!e) {
+    const created = { id: crypto.randomUUID(), done: false, skip: [], doneDates: [], ...data };
+    events.push(created);
+    save(created);
+  }
+  else if (e.repeat && scope() === "one") save(e, detach(e, editingDate, { ...data, repeat: "", until: "" }));
   else {
     // Editing a whole series from one occurrence: shift the series start by however far that occurrence moved
     if (e.repeat && data.repeat) {
@@ -642,8 +692,9 @@ $("form").onsubmit = () => {
       Object.assign(data, { date: shift(e.date), skip: (e.skip || []).map(shift), doneDates: (e.doneDates || []).map(shift) });
     }
     Object.assign(e, data);
+    save(e);
   }
-  save(); render();
+  render();
 };
 $("cancel").onclick = () => dlg.close();
 $("delete").onclick = () => {
@@ -683,6 +734,23 @@ function tick() {
 setInterval(tick, 1000);
 tick();
 render();
+
+// Load from the server. If it has nothing yet, upload whatever this browser stored before
+// server storage existed, then forget the local copy once the upload succeeds.
+(async () => {
+  try {
+    events = await fetchEvents();
+    let legacy = [];
+    try { legacy = JSON.parse(localStorage.getItem(LEGACY_STORE)) || []; } catch {}
+    if (!events.length && legacy.length) {
+      events = legacy;
+      save(...legacy);
+      queue.then(() => { if (!offline) try { localStorage.removeItem(LEGACY_STORE); } catch {} });
+    }
+    render();
+  } catch { setOffline(true); }
+  setInterval(sync, 30000);
+})();
 
 // Open index.html#selftest and check the console
 if (location.hash === "#selftest") {

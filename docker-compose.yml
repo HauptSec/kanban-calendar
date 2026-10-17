@@ -10,7 +10,18 @@ services:
     volumes:
       # Generated cert persists here; replace cert.pem/key.pem with your own to use a real one
       - certs:/etc/nginx/certs
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  api:
+    build: ./api
+    container_name: weekboard-api
+    volumes:
+      # All calendar events (events.json); survives container rebuilds and restarts
+      - data:/data
     restart: unless-stopped
 
 volumes:
   certs:
+  data:
