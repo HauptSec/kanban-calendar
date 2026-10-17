@@ -63,8 +63,12 @@
     display: flex;
     flex-direction: column;
     -webkit-font-smoothing: antialiased;
+    touch-action: manipulation;  /* no double-tap zoom, so taps respond immediately */
+    -webkit-tap-highlight-color: transparent;
   }
   button { font: inherit; color: inherit; cursor: pointer; }
+  /* Font Awesome 7 draws icons via an :is() rule (Chromium 88+); this plain rule covers older tablet browsers */
+  .fa-solid::before { content: var(--fa); }
 
   /* Header */
   header {
@@ -90,6 +94,7 @@
   }
   .btn:hover { background: var(--btn-hover); border-color: var(--btn-hover-line); }
   .btn.icon { width: 38px; height: 38px; padding: 0; display: grid; place-items: center; }
+  .btn i { pointer-events: none; }
   .btn.primary { background: var(--accent); border-color: var(--accent); color: #0b0d12; font-weight: 600; }
   .btn.danger { color: var(--danger); }
   .nav { display: flex; gap: 6px; }
@@ -112,8 +117,8 @@
     min-height: 0;
     transition: background .15s, border-color .15s;
   }
-  .column.today { background: var(--col-today); border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
-  .column.drag-over { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--col)); }
+  .column.today { background: var(--col-today); border-color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+  .column.drag-over { border-color: var(--accent); background: var(--col-today); background: color-mix(in srgb, var(--accent) 8%, var(--col)); }
   .col-head {
     display: flex;
     align-items: baseline;
@@ -125,7 +130,6 @@
   .today .col-head .dow { color: var(--accent); }
   .col-head .count { margin-left: auto; font-size: 12px; color: var(--muted); }
   .add {
-    opacity: 0;
     border: none;
     background: none;
     color: var(--muted);
@@ -134,7 +138,6 @@
     padding: 0 2px;
     transition: opacity .15s, color .15s;
   }
-  .column:hover .add { opacity: 1; }
   .add:hover { color: var(--text); }
   .cards {
     flex: 1;
@@ -150,25 +153,39 @@
   /* Card */
   .card {
     --c: #7c9cff;
+    --c-rgb: 124, 156, 255;  /* set per card from its color; rgba() tints work on old browsers */
     position: relative;
-    background: color-mix(in srgb, var(--c) 14%, var(--card-base));
-    border: 1px solid color-mix(in srgb, var(--c) 30%, transparent);
+    background: linear-gradient(rgba(var(--c-rgb), .14), rgba(var(--c-rgb), .14)), var(--card-base);
+    border: 1px solid rgba(var(--c-rgb), .3);
     border-left: 4px solid var(--c);
     border-radius: 10px;
     padding: 10px 10px 10px 12px;
     display: grid;
     grid-template-columns: auto 1fr;
     gap: 2px 10px;
-    cursor: grab;
+    cursor: pointer;
     transition: transform .12s, box-shadow .12s, opacity .2s;
+    /* long-press is used for dragging: no text selection or callout menu */
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
   }
-  .card:hover { box-shadow: 0 6px 20px var(--shadow); transform: translateY(-1px); }
   .card.dragging { opacity: .4; }
+  .card.ghost {
+    position: fixed;
+    z-index: 50;
+    margin: 0;
+    pointer-events: none;
+    opacity: .95;
+    transform: rotate(2deg) scale(1.03);
+    box-shadow: 0 16px 40px var(--shadow);
+  }
   .card .check {
     grid-row: span 3;
     appearance: none;
     width: 18px; height: 18px;
     margin: 2px 0 0;
+    border: 2px solid var(--c);
     border: 2px solid color-mix(in srgb, var(--c) 70%, var(--ink));
     border-radius: 6px;
     cursor: pointer;
@@ -183,7 +200,7 @@
     border-width: 0 2px 2px 0;
     transform: translateY(-1px) rotate(45deg);
   }
-  .card .when { font-size: 12px; font-weight: 600; color: color-mix(in srgb, var(--c) 60%, var(--ink)); font-variant-numeric: tabular-nums; }
+  .card .when { font-size: 12px; font-weight: 600; color: var(--c); color: color-mix(in srgb, var(--c) 60%, var(--ink)); font-variant-numeric: tabular-nums; }
   .card .name { font-size: 15px; font-weight: 600; line-height: 1.3; overflow-wrap: break-word; }
   .card .notes { font-size: 12.5px; color: var(--muted); line-height: 1.4; white-space: pre-wrap; overflow-wrap: break-word; }
   .card.done { opacity: .55; }
@@ -193,10 +210,8 @@
     top: 6px; right: 6px;
     display: flex;
     gap: 2px;
-    opacity: 0;
     transition: opacity .15s;
   }
-  .card:hover .tools { opacity: 1; }
   .tools button, .tools label {
     width: 24px; height: 24px;
     border: none;
@@ -248,8 +263,9 @@
   .swatches input[type=color] { width: 34px; height: 30px; padding: 2px; border-radius: 8px; cursor: pointer; }
   .actions { display: flex; gap: 8px; margin-top: 8px; }
   .scope { display: flex; gap: 6px; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 4px; }
-  .scope label { flex: 1; text-align: center; font-size: 13px; padding: 6px; border-radius: 7px; cursor: pointer; color: var(--muted); }
-  .scope label:has(input:checked) { background: var(--bg-2); color: var(--text); }
+  .scope label { flex: 1; display: flex; cursor: pointer; }
+  .scope span { flex: 1; text-align: center; font-size: 13px; padding: 6px; border-radius: 7px; color: var(--muted); }
+  .scope input:checked + span { background: var(--bg-2); color: var(--text); }
   .scope input { display: none; }
   .card .repeat { opacity: .8; margin-left: 4px; }
   .days { display: flex; gap: 6px; }
@@ -263,7 +279,7 @@
     color: var(--muted);
   }
   .days button.sel { background: var(--accent); border-color: var(--accent); color: #0b0d12; font-weight: 600; }
-  .card .ev-icon { margin-right: 7px; color: color-mix(in srgb, var(--c) 75%, var(--ink)); }
+  .card .ev-icon { margin-right: 7px; color: var(--c); color: color-mix(in srgb, var(--c) 75%, var(--ink)); }
 
   /* Icon dropdown */
   .icon-picker { position: relative; }
@@ -279,7 +295,8 @@
     border-radius: 10px;
     padding: 9px 11px;
   }
-  .icon-btn:focus-visible, .icon-btn[aria-expanded=true] { outline: none; border-color: var(--accent); }
+  .icon-btn[aria-expanded=true] { border-color: var(--accent); }
+  .icon-btn:focus-visible { outline: none; border-color: var(--accent); }
   .icon-btn .caret { margin-left: auto; font-size: 11px; color: var(--muted); }
   .icon-slot { width: 18px; text-align: center; color: var(--accent); }
   .icon-menu {
@@ -301,8 +318,9 @@
   .icon-group { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding: 10px 6px 6px; }
   .icon-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px; }
   .icon-opt { border-color: transparent; background: none; padding: 7px 8px; font-size: 13px; }
-  .icon-opt:hover, .icon-opt:focus-visible { outline: none; background: var(--btn-hover); }
-  .icon-opt[aria-selected=true] { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+  .icon-opt:hover { background: var(--btn-hover); }
+  .icon-opt:focus-visible { outline: none; background: var(--btn-hover); }
+  .icon-opt[aria-selected=true] { background: var(--btn-hover); background: color-mix(in srgb, var(--accent) 18%, transparent); }
   .icon-opt.none { color: var(--muted); }
 
   .card .years { font-weight: 500; color: var(--muted); }
@@ -315,6 +333,7 @@
   .tpl-picker .btn i { color: var(--accent); margin-right: 4px; }
   .tpl-menu { left: auto; width: 220px; max-height: 360px; }
   .tpl-box {
+    border: 1px solid var(--accent);
     border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--line));
     background: color-mix(in srgb, var(--accent) 6%, transparent);
     border-radius: 12px;
@@ -344,15 +363,45 @@
   dialog.small { width: min(400px, calc(100vw - 32px)); }
   dialog.small p { color: var(--muted); font-size: 14px; margin: 0 0 16px; }
 
-  /* Fullscreen: hide controls that aren't needed on a passive display */
-  body.fs .controls { display: none; }
+  /* Mouse: reveal quick tools on hover. Touch: no hover, so tap a card to edit it instead */
+  @media (hover: hover) {
+    .add { opacity: 0; transition: opacity .15s, color .15s; }
+    .column:hover .add { opacity: 1; }
+    .card:hover { box-shadow: 0 6px 20px var(--shadow); transform: translateY(-1px); }
+    .card .tools { opacity: 0; }
+    .card:hover .tools { opacity: 1; }
+  }
+  @media (hover: none) {
+    .card .tools { display: none; }
+  }
+  /* Finger-sized targets on touchscreens */
+  @media (pointer: coarse) {
+    .btn { padding: 11px 16px; font-size: 15px; }
+    .btn.icon { width: 46px; height: 46px; }
+    .nav { gap: 8px; }
+    .add { font-size: 22px; padding: 4px 8px; margin: -4px -6px -4px 0; }
+    .card { padding: 12px 12px 12px 14px; gap: 3px 12px; }
+    .card .check { width: 24px; height: 24px; border-radius: 7px; }
+    .card .check:checked::after { width: 6px; height: 12px; border-width: 0 3px 3px 0; }
+    dialog { padding: 22px; }
+    dialog input, dialog select, dialog textarea { font-size: 16px; padding: 11px 12px; }
+    dialog::backdrop { backdrop-filter: none; }  /* blur is slow on tablet GPUs */
+    .swatches { gap: 10px; }
+    .swatches button { width: 36px; height: 36px; }
+    .swatches input[type=color] { width: 44px; height: 38px; }
+    .icon-btn { padding: 11px 12px; font-size: 15px; }
+    .icon-opt { padding: 12px 10px; font-size: 14px; }
+    .icon-menu { max-height: 340px; }
+    .days button { padding: 12px 0; font-size: 14px; }
+    .scope span { padding: 10px; font-size: 14px; }
+    .tpl-picker .btn { padding: 9px 12px; }
+    .tpl-clear { padding: 8px 10px; margin-right: -8px; }
+  }
 
   @media (max-width: 900px) {
-    main { grid-template-columns: 1fr; overflow-y: auto; }
+    main { grid-template-columns: 1fr; grid-auto-rows: max-content; overflow-y: auto; }
     .column { min-height: 120px; }
     .cards { overflow: visible; }
-    .add { opacity: 1; }
-    .card .tools { opacity: 1; }
     header { flex-wrap: wrap; padding: 16px; }
     main { padding: 8px 16px 16px; }
   }
@@ -366,14 +415,14 @@
   </div>
   <div class="spacer"></div>
   <div class="clock"><div class="time" id="clockTime"></div><div class="date" id="clockDate"></div></div>
-  <div class="nav controls">
-    <button class="btn icon" id="prev" title="Previous week">&#8249;</button>
+  <div class="nav">
+    <button class="btn icon" id="prev" title="Previous week" aria-label="Previous week"><i class="fa-solid fa-chevron-left" aria-hidden="true"></i></button>
     <button class="btn" id="today">Today</button>
-    <button class="btn icon" id="next" title="Next week">&#8250;</button>
+    <button class="btn icon" id="next" title="Next week" aria-label="Next week"><i class="fa-solid fa-chevron-right" aria-hidden="true"></i></button>
   </div>
-  <button class="btn primary controls" id="newEvent">+ Event</button>
-  <button class="btn icon" id="theme" title="Toggle light/dark"></button>
-  <button class="btn icon" id="fullscreen" title="Toggle full screen">&#x26F6;</button>
+  <button class="btn primary" id="newEvent"><i class="fa-solid fa-plus" aria-hidden="true"></i> Event</button>
+  <button class="btn icon" id="theme" title="Toggle light/dark" aria-label="Toggle light/dark"></button>
+  <button class="btn icon" id="fullscreen" title="Toggle full screen" aria-label="Toggle full screen"><i class="fa-solid fa-expand" aria-hidden="true"></i></button>
 </header>
 
 <main id="board"></main>
@@ -443,8 +492,8 @@
     <div class="field" id="scopeField">
       <label>Apply changes to</label>
       <div class="scope">
-        <label><input type="radio" name="scope" value="one" checked> This event</label>
-        <label><input type="radio" name="scope" value="all"> All events</label>
+        <label><input type="radio" name="scope" value="one" checked><span>This event</span></label>
+        <label><input type="radio" name="scope" value="all"><span>All events</span></label>
       </div>
     </div>
     <div class="actions">
@@ -579,6 +628,11 @@ function fmtTime(t) {
   const [h, m] = t.split(":").map(Number);
   return `${((h + 11) % 12) + 1}:${String(m).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`;
 }
+// crypto.randomUUID needs Chromium 92+; older tablet browsers get an equivalent random hex id
+function newId() {
+  if (crypto.randomUUID) return crypto.randomUUID();
+  return Array.from(crypto.getRandomValues(new Uint8Array(16)), b => b.toString(16).padStart(2, "0")).join("");
+}
 function parse(s) { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d); }
 function diffDays(a, b) { return Math.round((parse(a) - parse(b)) / 864e5); }  // round absorbs DST hour
 
@@ -615,7 +669,7 @@ function setDone(e, day, v) {
 }
 // Split one occurrence off a series into a standalone event
 function detach(e, day, changes) {
-  const copy = { ...e, id: crypto.randomUUID(), date: day, done: isDone(e, day), repeat: "", until: "", skip: [], doneDates: [], ...changes };
+  const copy = { ...e, id: newId(), date: day, done: isDone(e, day), repeat: "", until: "", skip: [], doneDates: [], ...changes };
   e.skip = [...(e.skip || []), day];
   events.push(copy);
   return copy;
@@ -649,26 +703,13 @@ function render() {
       <div class="col-head">
         <span class="dow">${DOW[i]}</span><span class="num">${day.getDate()}</span>
         <span class="count">${list.length ? `${list.filter(e => isDone(e, dayIso)).length}/${list.length}` : ""}</span>
-        <button class="add controls" title="Add event">+</button>
+        <button class="add" title="Add event" aria-label="Add event"><i class="fa-solid fa-plus" aria-hidden="true"></i></button>
       </div>
       <div class="cards"></div>`;
     col.querySelector(".add").onclick = () => openEditor(null, dayIso);
     const cards = col.querySelector(".cards");
     list.forEach(e => cards.appendChild(cardEl(e, dayIso)));
 
-    col.addEventListener("dragover", ev => { ev.preventDefault(); col.classList.add("drag-over"); });
-    col.addEventListener("dragleave", ev => { if (!col.contains(ev.relatedTarget)) col.classList.remove("drag-over"); });
-    col.addEventListener("drop", ev => {
-      ev.preventDefault();
-      const [id, from] = ev.dataTransfer.getData("text/plain").split("|");
-      const e = events.find(x => x.id === id);
-      if (e && from !== dayIso) {
-        // Dragging a recurring occurrence moves just that one
-        if (e.repeat) save(e, detach(e, from, { date: dayIso }));
-        else { e.date = dayIso; save(e); }
-      }
-      render();
-    });
     board.appendChild(col);
   }
 }
@@ -677,25 +718,25 @@ function cardEl(e, day) {
   const done = isDone(e, day);
   const el = document.createElement("article");
   el.className = "card" + (done ? " done" : "");
-  el.style.setProperty("--c", e.color);
-  el.draggable = true;
+  const color = /^#[0-9a-f]{6}$/i.test(e.color) ? e.color : PALETTE[0];  // also keeps stored values out of the HTML below
+  setCardColor(el, color);
   const years = Number.isInteger(e.since) ? parse(day).getFullYear() - e.since : 0;  // age / anniversary count
   const when = e.start ? fmtTime(e.start) + (e.end ? ` - ${fmtTime(e.end)}` : "") : "All day";
   el.innerHTML = `
     <input type="checkbox" class="check" ${done ? "checked" : ""} aria-label="Mark complete">
-    <div class="when">${when}${e.repeat ? `<span class="repeat" title="Repeats">&#8635;</span>` : ""}</div>
+    <div class="when">${when}${e.repeat ? `<i class="fa-solid fa-repeat repeat" title="Repeats"></i>` : ""}</div>
     <div class="name">${ICON_LABELS[e.icon] ? `<i class="fa-solid fa-${e.icon} ev-icon" aria-hidden="true"></i>` : ""}${esc(e.title)}${years > 0 ? ` <span class="years">(${years})</span>` : ""}</div>
     ${e.notes ? `<div class="notes">${esc(e.notes)}</div>` : ""}
-    <div class="tools controls">
-      <label title="Color"><span class="swatch-dot"></span><input type="color" value="${e.color}"></label>
-      <button class="edit" title="Edit">&#9998;</button>
-      <button class="del" title="Delete">&#10005;</button>
+    <div class="tools">
+      <label title="Color"><span class="swatch-dot"></span><input type="color" value="${color}"></label>
+      <button class="edit" title="Edit" aria-label="Edit"><i class="fa-solid fa-pen" aria-hidden="true"></i></button>
+      <button class="del" title="Delete" aria-label="Delete"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
     </div>`;
 
   el.querySelector(".check").onchange = ev => { setDone(e, day, ev.target.checked); save(e); render(); };
-  const color = el.querySelector("input[type=color]");
-  color.oninput = () => el.style.setProperty("--c", color.value);  // live preview
-  color.onchange = () => { e.color = color.value; save(e); };
+  const picker = el.querySelector("input[type=color]");
+  picker.oninput = () => setCardColor(el, picker.value);  // live preview
+  picker.onchange = () => { e.color = picker.value; save(e); };
   el.querySelector(".edit").onclick = () => openEditor(e, day);
   el.querySelector(".del").onclick = () => {
     if (!e.repeat) { if (confirm(`Delete "${e.title}"?`)) remove(e, day, true); return; }
@@ -704,11 +745,88 @@ function cardEl(e, day) {
     delDlg.onclose = () => { if (delDlg.returnValue !== "cancel") remove(e, day, delDlg.returnValue === "all"); };
     delDlg.showModal();
   };
-  el.ondblclick = ev => { if (!ev.target.closest(".tools, .check")) openEditor(e, day); };
-  el.ondragstart = ev => { ev.dataTransfer.setData("text/plain", `${e.id}|${day}`); el.classList.add("dragging"); };
-  el.ondragend = () => el.classList.remove("dragging");
+  // Tap/click a card to edit it (ignoring the click that ends a drag)
+  el.onclick = ev => { if (!ev.target.closest(".tools, .check") && Date.now() - lastDragEnd > 300) openEditor(e, day); };
+  el.onpointerdown = ev => dragStart(ev, e, day, el);
+  el.oncontextmenu = ev => ev.preventDefault();  // Android long-press would open a menu
   return el;
 }
+function setCardColor(el, hex) {
+  el.style.setProperty("--c", hex);
+  el.style.setProperty("--c-rgb", [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16)).join(","));
+}
+
+// Drag a card to another day, with mouse or touch (HTML5 drag-and-drop doesn't work on touchscreens).
+// Touch starts after a short long-press so ordinary swipes still scroll; mouse starts after a few pixels.
+let drag = null;
+let lastDragEnd = 0;
+function dragStart(ev, e, day, el) {
+  if (ev.button > 0 || ev.target.closest(".tools, .check")) return;
+  drag = { e, from: day, el, x: ev.clientX, y: ev.clientY, active: false, touch: ev.pointerType !== "mouse" };
+  if (drag.touch) drag.timer = setTimeout(beginDrag, 350);
+}
+function beginDrag() {
+  const r = drag.el.getBoundingClientRect();
+  const ghost = drag.el.cloneNode(true);
+  ghost.classList.add("ghost");
+  ghost.style.width = r.width + "px";
+  document.body.appendChild(ghost);
+  Object.assign(drag, { active: true, ghost, dx: drag.x - r.left, dy: drag.y - r.top });
+  drag.el.classList.add("dragging");
+  if (navigator.vibrate) navigator.vibrate(15);
+  moveGhost();
+  requestAnimationFrame(autoScroll);
+}
+function moveGhost() {
+  drag.ghost.style.left = drag.x - drag.dx + "px";
+  drag.ghost.style.top = drag.y - drag.dy + "px";
+  const col = document.elementFromPoint(drag.x, drag.y)?.closest(".column");
+  if (col !== drag.over) {
+    drag.over?.classList.remove("drag-over");
+    col?.classList.add("drag-over");
+    drag.over = col;
+  }
+}
+// In the stacked (narrow) layout, holding a card near the top/bottom edge scrolls the board
+function autoScroll() {
+  if (!drag?.active) return;
+  const board = $("board"), r = board.getBoundingClientRect();
+  if (drag.y < r.top + 60) board.scrollTop -= 12;
+  else if (drag.y > r.bottom - 60) board.scrollTop += 12;
+  moveGhost();
+  requestAnimationFrame(autoScroll);
+}
+function endDrag(drop) {
+  if (!drag) return;
+  clearTimeout(drag.timer);
+  const d = drag;
+  drag = null;
+  if (!d.active) return;
+  d.ghost.remove();
+  lastDragEnd = Date.now();
+  const to = drop && d.over?.dataset.date;
+  if (to && to !== d.from) {
+    // Dragging a recurring occurrence moves just that one
+    if (d.e.repeat) save(d.e, detach(d.e, d.from, { date: to }));
+    else { d.e.date = to; save(d.e); }
+  }
+  render();
+}
+document.addEventListener("pointermove", ev => {
+  if (!drag) return;
+  if (!drag.active) {
+    if (Math.hypot(ev.clientX - drag.x, ev.clientY - drag.y) < 8) return;
+    if (drag.touch) { clearTimeout(drag.timer); drag = null; return; }  // finger moved before the long-press: a scroll
+    beginDrag();
+  }
+  drag.x = ev.clientX;
+  drag.y = ev.clientY;
+  moveGhost();
+});
+document.addEventListener("pointerup", () => endDrag(true));
+document.addEventListener("pointercancel", () => endDrag(false));
+// While a touch drag is active, stop the browser from scrolling (and cancelling the pointer)
+document.addEventListener("touchmove", ev => { if (drag?.active) ev.preventDefault(); }, { passive: false });
 
 // Callers confirm first
 function remove(e, day, all) {
@@ -824,7 +942,7 @@ $("form").onsubmit = () => {
   if (!e) {
     const age = tpl ? parseInt(tplValues().age, 10) : NaN;
     if (data.repeat === "yearly" && age >= 0 && age <= 150) data.since = parse(data.date).getFullYear() - age;
-    const created = { id: crypto.randomUUID(), done: false, skip: [], doneDates: [], ...data };
+    const created = { id: newId(), done: false, skip: [], doneDates: [], ...data };
     events.push(created);
     save(created);
   }
@@ -945,18 +1063,27 @@ $("prev").onclick = () => { weekStart = addDays(weekStart, -7); render(); };
 $("next").onclick = () => { weekStart = addDays(weekStart, 7); render(); };
 $("today").onclick = () => { weekStart = mondayOf(new Date()); render(); };
 $("newEvent").onclick = () => openEditor(null);
-$("fullscreen").onclick = () => document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
+// Older Android browsers only have the webkit-prefixed fullscreen API
+const fsElement = () => document.fullscreenElement || document.webkitFullscreenElement;
+$("fullscreen").onclick = () => {
+  const root = document.documentElement;
+  if (fsElement()) (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+  else (root.requestFullscreen || root.webkitRequestFullscreen).call(root);
+};
+if (!(document.fullscreenEnabled || document.webkitFullscreenEnabled)) $("fullscreen").hidden = true;
+const syncFsIcon = () => $("fullscreen").innerHTML = `<i class="fa-solid fa-${fsElement() ? "compress" : "expand"}" aria-hidden="true"></i>`;
+document.addEventListener("fullscreenchange", syncFsIcon);
+document.addEventListener("webkitfullscreenchange", syncFsIcon);
 // Theme is a per-device preference
 function setTheme(t) {
   document.documentElement.dataset.theme = t;
-  $("theme").innerHTML = t === "light" ? "&#9790;" : "&#9728;";  // show the mode you'd switch to
+  $("theme").innerHTML = `<i class="fa-solid fa-${t === "light" ? "moon" : "sun"}" aria-hidden="true"></i>`;  // the mode you'd switch to
   try { localStorage.setItem("weekboard.theme", t); } catch {}
 }
 let savedTheme = "dark";
 try { savedTheme = localStorage.getItem("weekboard.theme") || "dark"; } catch {}
 setTheme(savedTheme);
 $("theme").onclick = () => setTheme(document.documentElement.dataset.theme === "light" ? "dark" : "light");
-document.addEventListener("fullscreenchange", () => document.body.classList.toggle("fs", !!document.fullscreenElement));
 
 // Clock; also re-render when the day rolls over so "today" highlight moves
 let lastDay = iso(new Date());
