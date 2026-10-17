@@ -305,6 +305,29 @@
   .icon-opt[aria-selected=true] { background: color-mix(in srgb, var(--accent) 18%, transparent); }
   .icon-opt.none { color: var(--muted); }
 
+  .card .years { font-weight: 500; color: var(--muted); }
+
+  /* Templates */
+  .dlg-head { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+  .dlg-head h2 { margin: 0; }
+  .tpl-picker { position: relative; margin-left: auto; }
+  .tpl-picker .btn { font-size: 13px; padding: 6px 10px; }
+  .tpl-picker .btn i { color: var(--accent); margin-right: 4px; }
+  .tpl-menu { left: auto; width: 220px; max-height: 360px; }
+  .tpl-box {
+    border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--line));
+    background: color-mix(in srgb, var(--accent) 6%, transparent);
+    border-radius: 12px;
+    padding: 10px 12px 0;
+    margin-bottom: 14px;
+  }
+  .tpl-title { display: flex; align-items: center; font-size: 13px; font-weight: 600; margin-bottom: 8px; }
+  .tpl-title i { color: var(--accent); margin-right: 8px; }
+  .tpl-clear { margin-left: auto; border: none; background: none; color: var(--muted); padding: 2px 4px; }
+  .tpl-clear:hover { color: var(--text); }
+  .tpl-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
+  .tpl-fields .field:only-child { grid-column: span 2; }
+
   .offline {
     position: fixed;
     bottom: 16px;
@@ -358,7 +381,17 @@
 
 <dialog id="editor">
   <form method="dialog" id="form">
-    <h2 id="formTitle">New event</h2>
+    <div class="dlg-head">
+      <h2 id="formTitle">New event</h2>
+      <div class="tpl-picker" id="tplPicker">
+        <button type="button" class="btn" id="tplBtn" aria-haspopup="menu" aria-expanded="false"><i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i> Template</button>
+        <div class="icon-menu tpl-menu" id="tplMenu" role="menu" hidden></div>
+      </div>
+    </div>
+    <div class="tpl-box" id="tplBox" hidden>
+      <div class="tpl-title"><span id="tplName"></span><button type="button" class="tpl-clear" id="tplClear" title="Remove template"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button></div>
+      <div class="tpl-fields" id="tplFields"></div>
+    </div>
     <div class="field">
       <label id="iconLabel">Icon</label>
       <div class="icon-picker">
@@ -390,6 +423,7 @@
           <option value="monthly">Every month</option>
           <option value="monthlyNth">Every month</option>
           <option value="monthlyLast">Every month</option>
+          <option value="yearly">Every year</option>
         </select>
       </div>
       <div class="field" id="untilField"><label for="fUntil">Until (optional)</label><input id="fUntil" type="date"></div>
@@ -441,11 +475,11 @@ const PALETTE = ["#7c9cff", "#5ed6b4", "#ffb86b", "#ff7a9c", "#b18cff", "#4fc3f7
 const DOW = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 // Font Awesome Free (solid) icon names offered in the event form, by group
 const ICONS = [
-  ["Health & fitness", [["dumbbell", "Gym"], ["person-running", "Run"], ["person-biking", "Bike"], ["person-swimming", "Swim"], ["spa", "Yoga / spa"], ["heart-pulse", "Health"], ["stethoscope", "Doctor"], ["tooth", "Dentist"], ["pills", "Medication"], ["bed", "Rest"]]],
+  ["Health & fitness", [["dumbbell", "Gym"], ["person-running", "Run"], ["person-biking", "Bike"], ["person-swimming", "Swim"], ["spa", "Yoga / spa"], ["heart-pulse", "Health"], ["stethoscope", "Doctor"], ["tooth", "Dentist"], ["eye", "Eye doctor"], ["comments", "Therapy"], ["pills", "Medication"], ["bed", "Rest"]]],
   ["Food & errands", [["utensils", "Meal"], ["mug-hot", "Coffee"], ["burger", "Takeout"], ["pizza-slice", "Pizza"], ["wine-glass", "Drinks"], ["cart-shopping", "Shopping"]]],
   ["Work & study", [["briefcase", "Work"], ["laptop", "Computer"], ["video", "Video call"], ["phone", "Call"], ["envelope", "Email"], ["graduation-cap", "Class"], ["book", "Reading"], ["pen", "Writing"]]],
   ["Home", [["house", "Home"], ["broom", "Cleaning"], ["shirt", "Laundry"], ["screwdriver-wrench", "Repairs"], ["seedling", "Garden"], ["trash-can", "Trash day"]]],
-  ["Travel", [["car", "Drive"], ["gas-pump", "Fuel"], ["plane", "Flight"], ["train", "Train"], ["bus", "Bus"], ["suitcase", "Trip"]]],
+  ["Travel", [["car", "Drive"], ["wrench", "Car service"], ["gas-pump", "Fuel"], ["plane", "Flight"], ["train", "Train"], ["bus", "Bus"], ["suitcase", "Trip"]]],
   ["Family & friends", [["users", "Friends"], ["children", "Kids"], ["baby", "Baby"], ["cake-candles", "Birthday"], ["gift", "Gift"], ["champagne-glasses", "Celebration"], ["heart", "Date"], ["church", "Service"]]],
   ["Pets", [["dog", "Dog"], ["cat", "Cat"], ["paw", "Pet care"]]],
   ["Money", [["money-bill", "Pay"], ["credit-card", "Card"], ["file-invoice-dollar", "Bill"], ["piggy-bank", "Savings"]]],
@@ -454,6 +488,41 @@ const ICONS = [
 ];
 // Also the allow-list for rendering: an unknown icon value (e.g. from another client) is ignored
 const ICON_LABELS = Object.fromEntries(ICONS.flatMap(([, list]) => list));
+
+// Event templates. `fields` are asked for in the form; `fill` turns the answers into the
+// event title/icon/notes. Select options are [label, icon] so the choice can set the icon.
+// A numeric `age` answer on a yearly template is stored as `since` so each year shows its count.
+const TEMPLATES = [
+  { id: "birthday", name: "Birthday", icon: "cake-candles", color: "#ff7a9c", repeat: "yearly",
+    fields: [{ key: "who", label: "Name", placeholder: "Sam" }, { key: "age", label: "Turning (age)", type: "number" }],
+    fill: v => ({ title: v.who ? `${v.who}'s birthday` : "Birthday" }) },
+  { id: "anniversary", name: "Anniversary", icon: "heart", color: "#ff7a9c", repeat: "yearly",
+    fields: [{ key: "who", label: "Whose", placeholder: "Mom & Dad" }, { key: "age", label: "Celebrating (years)", type: "number" }],
+    fill: v => ({ title: v.who ? `${v.who}'s anniversary` : "Anniversary" }) },
+  { id: "appointment", name: "Appointment", icon: "calendar-check", color: "#4fc3f7",
+    fields: [
+      { key: "type", label: "Type", options: [["Doctor", "stethoscope"], ["Dentist", "tooth"], ["Eye doctor", "eye"], ["Haircut", "scissors"], ["Car service", "wrench"], ["Vet", "paw"], ["Therapy", "comments"], ["Other", "calendar-check"]] },
+      { key: "where", label: "With / where", placeholder: "Dr. Lee, Main St" }],
+    fill: v => ({ title: `${v.type} appointment`, icon: v.typeIcon, notes: v.where }) },
+  { id: "workout", name: "Workout", icon: "dumbbell", color: "#5ed6b4",
+    fields: [{ key: "type", label: "Activity", options: [["Gym", "dumbbell"], ["Run", "person-running"], ["Bike", "person-biking"], ["Swim", "person-swimming"], ["Yoga", "spa"]] }],
+    fill: v => ({ title: v.type, icon: v.typeIcon }) },
+  { id: "bill", name: "Bill due", icon: "file-invoice-dollar", color: "#f5d76e", repeat: "monthly",
+    fields: [{ key: "who", label: "Pay to", placeholder: "Electric company" }, { key: "amount", label: "Amount", placeholder: "$120" }],
+    fill: v => ({ title: v.who ? `Pay ${v.who}` : "Pay bill", notes: v.amount && `Amount: ${v.amount}` }) },
+  { id: "dinner", name: "Dinner plans", icon: "utensils", color: "#ffb86b", start: "18:30",
+    fields: [{ key: "who", label: "With", placeholder: "Friends" }, { key: "where", label: "Where", placeholder: "Restaurant" }],
+    fill: v => ({ title: v.who ? `Dinner with ${v.who}` : "Dinner", notes: v.where }) },
+  { id: "trip", name: "Trip", icon: "plane", color: "#b18cff",
+    fields: [{ key: "where", label: "Destination", placeholder: "Denver" }, { key: "type", label: "By", options: [["Flight", "plane"], ["Train", "train"], ["Drive", "car"], ["Bus", "bus"]] }],
+    fill: v => ({ title: v.where ? `${v.type} to ${v.where}` : v.type, icon: v.typeIcon }) },
+  { id: "call", name: "Call", icon: "phone", color: "#7c9cff",
+    fields: [{ key: "who", label: "Who", placeholder: "Mom" }],
+    fill: v => ({ title: v.who ? `Call ${v.who}` : "Call" }) },
+  { id: "medication", name: "Medication", icon: "pills", color: "#a0a8b8", repeat: "daily", start: "08:00",
+    fields: [{ key: "who", label: "Medication", placeholder: "Vitamin D" }],
+    fill: v => ({ title: v.who ? `Take ${v.who}` : "Take medication" }) },
+];
 
 let events = [];
 let weekStart = mondayOf(new Date());
@@ -531,6 +600,8 @@ function occursOn(e, day) {
     case "monthly": return d.getDate() === s.getDate();
     case "monthlyNth": return d.getDay() === s.getDay() && nthOf(d) === nthOf(s);
     case "monthlyLast": return d.getDay() === s.getDay() && isLastOf(d);
+    // ponytail: Feb 29 events only appear in leap years
+    case "yearly": return d.getMonth() === s.getMonth() && d.getDate() === s.getDate();
   }
   return false;
 }
@@ -608,11 +679,12 @@ function cardEl(e, day) {
   el.className = "card" + (done ? " done" : "");
   el.style.setProperty("--c", e.color);
   el.draggable = true;
+  const years = Number.isInteger(e.since) ? parse(day).getFullYear() - e.since : 0;  // age / anniversary count
   const when = e.start ? fmtTime(e.start) + (e.end ? ` - ${fmtTime(e.end)}` : "") : "All day";
   el.innerHTML = `
     <input type="checkbox" class="check" ${done ? "checked" : ""} aria-label="Mark complete">
     <div class="when">${when}${e.repeat ? `<span class="repeat" title="Repeats">&#8635;</span>` : ""}</div>
-    <div class="name">${ICON_LABELS[e.icon] ? `<i class="fa-solid fa-${e.icon} ev-icon" aria-hidden="true"></i>` : ""}${esc(e.title)}</div>
+    <div class="name">${ICON_LABELS[e.icon] ? `<i class="fa-solid fa-${e.icon} ev-icon" aria-hidden="true"></i>` : ""}${esc(e.title)}${years > 0 ? ` <span class="years">(${years})</span>` : ""}</div>
     ${e.notes ? `<div class="notes">${esc(e.notes)}</div>` : ""}
     <div class="tools controls">
       <label title="Color"><span class="swatch-dot"></span><input type="color" value="${e.color}"></label>
@@ -690,6 +762,7 @@ function updateRepeatUI() {
   opt("monthlyNth").textContent = `Monthly on the ${["1st", "2nd", "3rd", "4th", "5th"][nthOf(d) - 1]} ${DAY_NAMES[d.getDay()]}`;
   opt("monthlyLast").textContent = `Monthly on the last ${DAY_NAMES[d.getDay()]}`;
   opt("monthlyLast").hidden = !isLastOf(d);
+  opt("yearly").textContent = `Yearly on ${d.toLocaleDateString(undefined, { month: "long", day: "numeric" })}`;
   renderDays();
 }
 function renderDays() {
@@ -726,6 +799,8 @@ function openEditor(e, date) {
   pickedColor = e?.color || PALETTE[0];
   setIcon(e?.icon || "");
   $("delete").style.display = e ? "" : "none";
+  $("tplPicker").hidden = !!e;
+  pickTemplate(null);
   renderSwatches();
   updateRepeatUI();
   dlg.showModal();
@@ -747,6 +822,8 @@ $("form").onsubmit = () => {
   };
   const e = editing();
   if (!e) {
+    const age = tpl ? parseInt(tplValues().age, 10) : NaN;
+    if (data.repeat === "yearly" && age >= 0 && age <= 150) data.since = parse(data.date).getFullYear() - age;
     const created = { id: crypto.randomUUID(), done: false, skip: [], doneDates: [], ...data };
     events.push(created);
     save(created);
@@ -794,9 +871,67 @@ $("iconMenu").onclick = ev => {
   $("iconBtn").focus();
 };
 // Click outside closes the menu; Esc closes the menu before it would close the dialog
-dlg.addEventListener("click", ev => { if (!ev.target.closest(".icon-picker")) toggleIconMenu(false); });
-dlg.addEventListener("cancel", ev => { if (!$("iconMenu").hidden) { ev.preventDefault(); toggleIconMenu(false); $("iconBtn").focus(); } });
-dlg.addEventListener("close", () => toggleIconMenu(false));
+// Template menu (new events only)
+let tpl = null;
+function toggleTplMenu(open) {
+  $("tplMenu").hidden = !open;
+  $("tplBtn").setAttribute("aria-expanded", open);
+  if (open) $("tplMenu").querySelector("button").focus();
+}
+function tplValues() {
+  const v = {};
+  tpl.fields.forEach(f => {
+    v[f.key] = $("tpl-" + f.key).value.trim();
+    if (f.options) v.typeIcon = f.options.find(([label]) => label === v[f.key])?.[1];
+  });
+  return v;
+}
+function applyTemplate() {
+  const out = tpl.fill(tplValues());
+  $("fTitle").value = out.title;
+  setIcon(out.icon || tpl.icon);
+  if ("notes" in out) $("fNotes").value = out.notes || "";
+}
+function pickTemplate(t) {
+  tpl = t;
+  $("tplBox").hidden = !t;
+  toggleTplMenu(false);
+  if (!t) return;
+  $("tplName").innerHTML = `<i class="fa-solid fa-${t.icon}" aria-hidden="true"></i>${t.name}`;
+  $("tplFields").innerHTML = t.fields.map(f => `<div class="field"><label for="tpl-${f.key}">${f.label}</label>${f.options
+    ? `<select id="tpl-${f.key}">${f.options.map(([label]) => `<option>${label}</option>`).join("")}</select>`
+    : `<input id="tpl-${f.key}" autocomplete="off" placeholder="${f.placeholder || ""}"${f.type === "number" ? ' type="number" min="0" max="150" inputmode="numeric"' : ""}>`}</div>`).join("");
+  $("tplFields").querySelectorAll("input, select").forEach(el => el.oninput = el.onchange = applyTemplate);
+  pickedColor = t.color;
+  renderSwatches();
+  $("fRepeat").value = t.repeat || "";
+  $("fStart").value = t.start || "";
+  $("fEnd").value = "";
+  updateRepeatUI();
+  applyTemplate();
+  $("tplFields").querySelector("input, select").focus();
+}
+$("tplMenu").innerHTML = TEMPLATES.map(t =>
+  `<button type="button" role="menuitem" class="icon-opt" data-tpl="${t.id}">${iconHtml(t.icon, t.name)}</button>`).join("");
+$("tplBtn").onclick = () => toggleTplMenu($("tplMenu").hidden);
+$("tplMenu").onclick = ev => {
+  const b = ev.target.closest("[data-tpl]");
+  if (b) pickTemplate(TEMPLATES.find(t => t.id === b.dataset.tpl));
+};
+$("tplClear").onclick = () => { pickTemplate(null); $("fTitle").focus(); };
+
+// Click outside closes a menu; Esc closes an open menu before it would close the dialog
+dlg.addEventListener("click", ev => {
+  if (!ev.target.closest(".icon-picker")) toggleIconMenu(false);
+  if (!ev.target.closest(".tpl-picker")) toggleTplMenu(false);
+});
+dlg.addEventListener("cancel", ev => {
+  if ($("iconMenu").hidden && $("tplMenu").hidden) return;
+  ev.preventDefault();
+  toggleIconMenu(false);
+  toggleTplMenu(false);
+});
+dlg.addEventListener("close", () => { toggleIconMenu(false); toggleTplMenu(false); });
 $("delete").onclick = () => {
   const e = editing(), all = !e.repeat || scope() === "all";
   const msg = !e.repeat ? `Delete "${e.title}"?` : all ? `Delete every "${e.title}" event?` : `Delete "${e.title}" on this day only?`;
@@ -868,6 +1003,7 @@ if (location.hash === "#selftest") {
     t(occursOn({ ...s, repeat: "biweekly", days: [1, 3] }, "2026-10-28") && !occursOn({ ...s, repeat: "biweekly", days: [1, 3] }, "2026-10-21"), "biweekly on Mon+Wed"),
     t(occursOn({ ...s, repeat: "monthlyNth" }, "2026-11-09") && !occursOn({ ...s, repeat: "monthlyNth" }, "2026-11-16"), "2nd Monday"),
     t(occursOn({ ...s, date: "2026-10-26", repeat: "monthlyLast" }, "2026-11-30") && !occursOn({ ...s, date: "2026-10-26", repeat: "monthlyLast" }, "2026-11-23"), "last Monday"),
+    t(occursOn({ ...s, repeat: "yearly" }, "2027-10-12") && !occursOn({ ...s, repeat: "yearly" }, "2026-11-12"), "yearly"),
     t(diffDays("2026-11-02", "2026-10-26") === 7, "diff across DST"),
   ].every(Boolean);
   console.log(ok ? "selftest passed" : "selftest FAILED");
