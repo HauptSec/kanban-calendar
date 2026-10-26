@@ -3,6 +3,8 @@
   GET    /api/events        -> list of all events
   PUT    /api/events/<id>   -> create or replace one event
   DELETE /api/events/<id>   -> delete one event
+  GET    /api/events/stream -> Server-Sent Events: a message after every change, so
+                               open boards refetch immediately
 
 Events live in DATA_DIR/events.json. Every write goes to a temp file, is
 fsynced, then atomically renamed over the old file, so a crash or power cut
@@ -24,6 +26,17 @@ PORT = int(os.environ.get("PORT", "8000"))
 MAX_BODY = 64 * 1024
 EVENT_PATH = re.compile(r"/api/events/([A-Za-z0-9_-]{1,64})")
 lock = threading.Lock()  # ponytail: one lock + whole-file rewrite per change; fine for a personal calendar
+HEARTBEAT = 25  # seconds; keeps idle streams alive through proxies (nginx times out at 60)
+# ponytail: one thread per open stream; fine for a handful of household devices
+changed = threading.Condition()
+version = 0  # bumped on every write; streams send the latest value
+
+
+def notify():
+    global version
+    with changed:
+        version += 1
+        changed.notify_all()
 
 
 def load():
@@ -62,7 +75,34 @@ class Handler(SimpleHTTPRequestHandler):
         m = EVENT_PATH.fullmatch(self.path)
         return m and m[1]
 
+    def stream(self):
+        self.close_connection = True
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream")
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Accel-Buffering", "no")  # tell nginx not to buffer the stream
+        self.end_headers()
+        with changed:
+            seen = version
+        try:
+            self.wfile.write(b"retry: 3000\n\n")  # browser reconnect delay
+            self.wfile.flush()
+            while True:
+                with changed:
+                    changed.wait_for(lambda: version != seen, timeout=HEARTBEAT)
+                    current = version
+                if current != seen:
+                    seen = current
+                    self.wfile.write(f"data: {current}\n\n".encode())
+                else:
+                    self.wfile.write(b": ping\n\n")
+                self.wfile.flush()
+        except (BrokenPipeError, ConnectionResetError):
+            pass  # client went away
+
     def do_GET(self):
+        if self.path == "/api/events/stream":
+            return self.stream()
         if self.path == "/api/events":
             with lock:
                 return self.send_json(200, list(load().values()))
@@ -90,6 +130,7 @@ class Handler(SimpleHTTPRequestHandler):
             events = load()
             events[event_id] = event
             store(events)
+        notify()
         self.send_json(200, {"ok": True})
 
     def do_DELETE(self):
@@ -98,8 +139,11 @@ class Handler(SimpleHTTPRequestHandler):
             return self.send_json(404, {"error": "not found"})
         with lock:
             events = load()
-            if events.pop(event_id, None) is not None:
+            removed = events.pop(event_id, None) is not None
+            if removed:
                 store(events)
+        if removed:
+            notify()
         self.send_json(200, {"ok": True})
 
 

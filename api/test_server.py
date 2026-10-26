@@ -40,4 +40,15 @@ with open(server.DATA_FILE) as f:
 assert call("DELETE", "/abc-1")[0] == 200
 assert call("GET") == (200, [])
 assert not os.path.exists(server.DATA_FILE + ".tmp"), "no temp file left behind"
+
+# Live updates: a write pushes a message to open streams
+stream = urllib.request.urlopen(base + "/stream", timeout=5)
+assert stream.headers["Content-Type"] == "text/event-stream"
+assert stream.readline() == b"retry: 3000\n" and stream.readline() == b"\n"
+call("PUT", "/live", {"id": "live"})
+assert stream.readline().startswith(b"data: "), "change pushed to stream"
+call("DELETE", "/missing")  # deleting nothing is not a change
+call("DELETE", "/live")
+assert stream.readline() == b"\n" and stream.readline().startswith(b"data: "), "delete pushed, no-op delete skipped"
+stream.close()
 print("api tests passed")

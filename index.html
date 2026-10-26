@@ -617,14 +617,20 @@ async function fetchEvents() {
   if (!res.ok) throw new Error(res.status);
   return res.json();
 }
-// Pick up changes made on other devices. Skipped mid-edit so the board doesn't jump under you.
+// Pick up changes made on other devices. Deferred while you're editing or dragging so the
+// board doesn't jump under you; it retries every second until you're done.
 // ponytail: edits that failed to save while offline are replaced by server data on the next sync
+let syncRetry = 0;
 async function sync() {
-  if (pending || dlg.open || delDlg.open || document.querySelector(".dragging")) return;
+  clearTimeout(syncRetry);
+  if (pending || dlg.open || delDlg.open || document.querySelector(".dragging")) {
+    syncRetry = setTimeout(sync, 1000);
+    return;
+  }
   try {
     const fresh = await fetchEvents();
     setOffline(false);
-    if (pending) return;  // a local edit started while fetching; the next sync gets it
+    if (pending) { syncRetry = setTimeout(sync, 1000); return; }  // a local edit started while fetching
     if (JSON.stringify(fresh) !== JSON.stringify(events)) { events = fresh; render(); }
   } catch { setOffline(true); }
 }
@@ -1143,7 +1149,16 @@ render();
     }
     render();
   } catch { setOffline(true); }
-  setInterval(sync, 30000);
+  // Live updates: the server pushes a message whenever any device changes an event.
+  // EventSource reconnects by itself; on (re)connect, catch up on anything missed meanwhile.
+  if (window.EventSource) {
+    const live = new EventSource("/api/events/stream");
+    live.onmessage = sync;
+    live.onopen = sync;
+  }
+  // Tablets drop connections while the screen is off; refresh as soon as it's visible again
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) sync(); });
+  setInterval(sync, 30000);  // fallback in case live updates are blocked somewhere
 })();
 
 // Open index.html#selftest and check the console

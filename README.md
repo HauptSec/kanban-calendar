@@ -13,7 +13,8 @@ A self-hosted weekly calendar laid out as a kanban board, built to run full scre
 - **Templates**: Birthday, Anniversary, Appointment, Workout, Bill due, Dinner plans, Trip, Call and Medication. Answer a couple of questions and the title, icon, color, time and repeat are filled in. Birthdays show the right age every year.
 - **Sensible defaults**: picking a start time sets the end an hour later; moving the start keeps the event's length.
 - **Light and dark themes**, remembered per device.
-- **Server-side storage**: events live in a Docker volume on the server, so they survive restarts, rebuilds and power cuts, and every device sees the same calendar (open boards refresh every 30 seconds).
+- **Server-side storage**: events live in a Docker volume on the server, so they survive restarts, rebuilds and power cuts.
+- **Live sync**: a change on one device appears on every other open board within a moment, no reload needed (Server-Sent Events, with a 30-second poll as fallback).
 - **HTTPS out of the box** with a generated self-signed certificate, or bring your own.
 - **Optional auto-deploy**: the server can pull this repo and rebuild whenever `main` changes.
 
@@ -164,5 +165,6 @@ API:
 | `GET` | `/api/events` | List all events. |
 | `PUT` | `/api/events/<id>` | Create or replace one event (JSON body, `id` must match). |
 | `DELETE` | `/api/events/<id>` | Delete one event. |
+| `GET` | `/api/events/stream` | Server-Sent Events: one message after every change. |
 
 There is no authentication: anyone who can reach port 8001 can view and edit the calendar. Run it on a network you trust.
