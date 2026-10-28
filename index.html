@@ -365,6 +365,21 @@
   /* Templates */
   .dlg-head { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
   .dlg-head h2 { margin: 0; }
+  .dlg-close {
+    flex: none;
+    width: 34px;
+    height: 34px;
+    margin: -6px 0 -6px -8px;  /* align the icon, not the hit area, with the dialog edge */
+    padding: 0;
+    border: none;
+    border-radius: 8px;
+    background: none;
+    color: var(--muted);
+    font-size: 18px;
+    line-height: 1;
+    text-align: center;
+  }
+  .dlg-close:hover { background: var(--btn-hover); color: var(--text); }
   .tpl-picker { position: relative; margin-left: auto; }
   .tpl-picker .btn { font-size: 13px; padding: 6px 10px; }
   .tpl-picker .btn i { color: var(--accent); margin-right: 4px; }
@@ -435,6 +450,7 @@
     .tpl-picker .btn { padding: 9px 12px; }
     .tpl-clear { padding: 8px 10px; margin-right: -8px; }
     .toggle { font-size: 15px; }
+    .dlg-close { width: 44px; height: 44px; margin: -10px -2px -10px -12px; font-size: 20px; }
     .toggle .track { width: 48px; height: 28px; border-radius: 14px; }
     .toggle .track::after { width: 22px; height: 22px; }
     .toggle input:checked + .track::after { transform: translateX(20px); }
@@ -479,6 +495,7 @@
 <dialog id="editor">
   <form method="dialog" id="form">
     <div class="dlg-head">
+      <button type="button" class="dlg-close" id="closeX" title="Close" aria-label="Close"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
       <h2 id="formTitle">New event</h2>
       <div class="tpl-picker" id="tplPicker">
         <button type="button" class="btn" id="tplBtn" aria-haspopup="menu" aria-expanded="false"><i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i> Template</button>
@@ -1123,7 +1140,7 @@ $("form").onsubmit = () => {
   }
   render();
 };
-$("cancel").onclick = () => dlg.close();
+$("cancel").onclick = $("closeX").onclick = () => dlg.close();
 
 // Icon dropdown
 let pickedIcon = "";
