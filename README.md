@@ -11,7 +11,8 @@ A self-hosted weekly calendar laid out as a kanban board, built to run full scre
 - **Touch first**: tap a card to edit it, long-press and drag to move it to another day, finger-sized buttons, full-screen mode. Works with a mouse too.
 - **Recurring events**: daily, weekdays, weekly or every 2 weeks on chosen days, monthly by date, by weekday (e.g. 2nd Tuesday or last Friday), or yearly. Edit or delete one occurrence or the whole series. Each occurrence is checked off separately.
 - **Templates**: Birthday, Anniversary, Appointment, Workout, Bill due, Dinner plans, Trip, Call and Medication. Answer a couple of questions and the title, icon, color, time and repeat are filled in. Birthdays show the right age every year.
-- **Sensible defaults**: picking a start time sets the end an hour later; moving the start keeps the event's length.
+- **US holidays**: federal holidays (plus the observed Friday/Monday when one falls on a weekend) and popular observances such as Easter, Mother's Day, Halloween, Hanukkah and Daylight Saving Time, each with its own icon, shown at the top of the day. They're calculated, not stored, so they appear automatically every year.
+- **All-day or timed**: an All day switch in the event form; timed events need a start, and picking one sets the end an hour later. Moving the start keeps the event's length.
 - **Light and dark themes**, remembered per device.
 - **Server-side storage**: events live in a Docker volume on the server, so they survive restarts, rebuilds and power cuts.
 - **Live sync**: a change on one device appears on every other open board within a moment, no reload needed (Server-Sent Events, with a 30-second poll as fallback).
